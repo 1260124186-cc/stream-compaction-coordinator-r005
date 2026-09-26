@@ -231,6 +231,7 @@ committed. Reads return immutable snapshot values.
 go build ./cmd/segmentd
 go run ./cmd/segmentd serve
 go run ./cmd/segmentd verify append-rollover
+go run ./cmd/segmentd verify compaction-lineage
 go run ./cmd/segmentd verify compaction-recovery
 go run ./cmd/segmentd verify replica-watermark
 ```

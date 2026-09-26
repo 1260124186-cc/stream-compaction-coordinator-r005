@@ -57,6 +57,10 @@ func NewCompactionPlan(
 				WithDetail("segment_id", segmentID).
 				WithDetail("state", segment.State)
 		}
+		if len(segment.SourceSegmentIDs) > 0 {
+			return nil, NewError(CodeInvalidState, "compacted segment cannot be a source in another plan").
+				WithDetail("segment_id", segmentID)
+		}
 		ranges = append(ranges, segment.Range)
 		generations[segmentID] = segment.Generation
 	}
