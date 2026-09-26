@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "name": "stream-compaction-coordinator",
+  "project_shape": "backend",
+  "summary": "Durable control plane for append-only stream segment rollover, compaction, replica acknowledgement, and restart recovery.",
+  "modules": [
+    {
+      "id": "config",
+      "path": "internal/config",
+      "responsibility": "parse bounded runtime settings and defaults"
+    },
+    {
+      "id": "domain",
+      "path": "internal/domain",
+      "responsibility": "entities, range arithmetic, transitions, and validation"
+    },
+    {
+      "id": "storage",
+      "path": "internal/storage",
+      "responsibility": "snapshot codec, atomic publication, and catalog access"
+    },
+    {
+      "id": "application",
+      "path": "internal/application",
+      "responsibility": "workflow orchestration, mutation serialization, and recovery"
+    },
+    {
+      "id": "httpapi",
+      "path": "internal/httpapi",
+      "responsibility": "JSON entry points, request limits, and error mapping"
+    },
+    {
+      "id": "runtimecheck",
+      "path": "internal/runtimecheck",
+      "responsibility": "bounded end-to-end workflow probes"
+    },
+    {
+      "id": "observability",
+      "path": "internal/observability",
+      "responsibility": "structured audit and operation events"
+    },
+    {
+      "id": "idgen",
+      "path": "internal/idgen",
+      "responsibility": "collision-resistant entity identifiers"
+    },
+    {
+      "id": "clock",
+      "path": "internal/clock",
+      "responsibility": "injectable time source"
+    }
+  ],
+  "complexity": {
+    "mechanisms": [
+      "range_arithmetic",
+      "state_transition",
+      "concurrency",
+      "error_propagation",
+      "resource_lifecycle",
+      "idempotency",
+      "restart_recovery"
+    ]
+  },
+  "workflows": [
+    {
+      "id": "append-rollover",
+      "name": "Register, append, and roll over",
+      "entry": "create /v1/streams and create /v1/streams/{stream_id}/records",
+      "steps": [
+        "validate stream and append input",
+        "advance the active segment range",
+        "seal and replace the active segment at the threshold",
+        "persist snapshot and audit event"
+      ],
+      "success": "returns the stream revision and either the expanded or newly open segment",
+      "failure": "returns a stable validation, conflict, overflow, or persistence error without partial mutation",
+      "verification": "verify append-rollover exercises HTTP creation, append, threshold rollover, and durable readback",
+      "module_ids": [
+        "runtimecheck",
+        "httpapi",
+        "application",
+        "domain",
+        "storage",
+        "observability",
+        "idgen"
+      ]
+    },
+    {
+      "id": "compaction-recovery",
+      "name": "Plan, finish, and recover compaction",
+      "entry": "create /v1/streams/{stream_id}/compaction-plans and create /v1/compaction-plans/{plan_id}/finish",
+      "steps": [
+        "validate contiguous sealed source segments",
+        "freeze and start a plan",
+        "atomically commit a compacted result and retire sources",
+        "reload the snapshot and abort an interrupted running plan"
+      ],
+      "success": "returns a completed plan and advances the compaction floor",
+      "failure": "rejects gaps, overlaps, invalid state, stale generation, or unsafe finish data and preserves recoverability",
+      "verification": "verify compaction-recovery runs completion and interrupted-plan recovery through the HTTP path",
+      "module_ids": [
+        "runtimecheck",
+        "httpapi",
+        "application",
+        "domain",
+        "storage",
+        "observability",
+        "idgen"
+      ]
+    },
+    {
+      "id": "replica-watermark",
+      "name": "Acknowledge replicas and recover the watermark",
+      "entry": "create /v1/segments/{segment_id}/replica-acks and read /v1/streams/{stream_id}/watermark",
+      "steps": [
+        "validate segment generation and acknowledgement range",
+        "apply monotonic replica progress",
+        "reduce live segment boundaries into a safe watermark",
+        "reload and recompute the watermark after restart"
+      ],
+      "success": "returns an updated acknowledgement and a monotonic stream watermark",
+      "failure": "rejects stale generations, retired segments, decreasing offsets, and damaged snapshots",
+      "verification": "verify replica-watermark acknowledges replicas, checks reduction, restarts, and reads the recovered watermark",
+      "module_ids": [
+        "runtimecheck",
+        "httpapi",
+        "application",
+        "domain",
+        "storage",
+        "observability"
+      ]
+    }
+  ]
+}

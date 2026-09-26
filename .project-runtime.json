@@ -1,0 +1,23 @@
+{
+  "language": "go",
+  "project_shape": "backend",
+  "source_extensions": [
+    ".go"
+  ],
+  "build_command": "go build -o .build/segmentd ./cmd/segmentd",
+  "testing": "deferred",
+  "workflow_checks": [
+    {
+      "workflow_id": "append-rollover",
+      "command": "go run ./cmd/segmentd verify append-rollover"
+    },
+    {
+      "workflow_id": "compaction-recovery",
+      "command": "go run ./cmd/segmentd verify compaction-recovery"
+    },
+    {
+      "workflow_id": "replica-watermark",
+      "command": "go run ./cmd/segmentd verify replica-watermark"
+    }
+  ]
+}
